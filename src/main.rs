@@ -1,11 +1,12 @@
 use gmi::{protocol::StatusCode, *};
-use std::convert::TryFrom;
-use std::collections::{HashMap, HashSet, VecDeque};
+use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::dot::{Dot, Config};
-use std::fs;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::convert::TryFrom;
+use std::fs;
+use std::panic;
 
 #[derive(Debug)]
 struct GeminiError {
@@ -21,10 +22,8 @@ impl std::fmt::Display for GeminiError {
 
 impl std::error::Error for GeminiError {}
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct PageInfo {
-	url: String,
-	title: Option<String>,
+fn parse_gemtext_safe(page: &str) -> Option<Vec<gemtext::GemtextNode>> {
+	panic::catch_unwind(|| gemtext::parse_gemtext(page)).ok()
 }
 
 fn request_page(url: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -65,27 +64,33 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 
 	// println!("{page}");
 
-	let gemtext_nodes = gemtext::parse_gemtext(page.as_str());
+	let gemtext_nodes = match parse_gemtext_safe(page.as_str()) {
+		Some(nodes) => nodes,
+		None => {
+			eprintln!("  Skipping {} because error occured when parsing gmi.", url);
+			return Ok(Vec::new());
+		}
+	};
 
-  let mut links: Vec<String> = Vec::new();
+	let mut links: Vec<String> = Vec::new();
 
 	for node in &gemtext_nodes {
 		if let gemtext::GemtextNode::Link(link, caption) = node {
 			println!("  LINK: {:?} {:?}", caption, link);
-      links.push(link.to_owned());
+			links.push(link.to_owned());
 		}
 	}
-  
-  // fix links like "/about"
-  for i in 0..links.len() {
-    if links[i].starts_with('/') {
-      if let Ok(parsed) = url::Url::try_from(url) {
-        links[i] = format!("gemini://{}{}", parsed.authority, links[i]);
-      }
-    }
-  }
 
-  Ok(links)
+	// fix links like "/about"
+	for i in 0..links.len() {
+		if links[i].starts_with('/') {
+			if let Ok(parsed) = url::Url::try_from(url) {
+				links[i] = format!("gemini://{}{}", parsed.authority, links[i]);
+			}
+		}
+	}
+
+	Ok(links)
 }
 
 fn recursive_process_page(url: &str, visited: &mut HashSet<String>) {
@@ -109,8 +114,8 @@ fn recursive_process_page(url: &str, visited: &mut HashSet<String>) {
 	}
 }
 
-fn crawl(start: &str, max_depth: usize) -> DiGraph<PageInfo, ()> {
-	let mut graph: DiGraph<PageInfo, ()> = DiGraph::new();
+fn crawl(start: &str, max_depth: usize) -> DiGraph<String, ()> {
+	let mut graph: DiGraph<String, ()> = DiGraph::new();
 	let mut indices: HashMap<String, NodeIndex> = HashMap::new();
 	let mut visited: HashSet<String> = HashSet::new();
 	let mut queue: VecDeque<(String, usize)> = VecDeque::new();
@@ -123,16 +128,15 @@ fn crawl(start: &str, max_depth: usize) -> DiGraph<PageInfo, ()> {
 		}
 		visited.insert(url.clone());
 
-		// добавляем узел, если ещё не добавлен
-		let idx = *indices.entry(url.clone()).or_insert_with(|| {
-			graph.add_node(PageInfo { url: url.clone(), title: None })
-		});
+		let idx = *indices
+			.entry(url.clone())
+			.or_insert_with(|| graph.add_node(url.clone()));
 
 		match process_page(&url) {
 			Ok(links) => {
 				for link in links {
 					let link_idx = *indices.entry(link.clone()).or_insert_with(|| {
-						graph.add_node(PageInfo { url: link.clone(), title: None })
+						graph.add_node(link.clone())
 					});
 
 					graph.add_edge(idx, link_idx, ());
@@ -151,18 +155,18 @@ fn crawl(start: &str, max_depth: usize) -> DiGraph<PageInfo, ()> {
 	graph
 }
 
-fn save_graph_json(graph: &DiGraph<PageInfo, ()>, path: &str) -> std::io::Result<()> {
+fn save_graph_json(graph: &DiGraph<String, ()>, path: &str) -> std::io::Result<()> {
 	let json = serde_json::to_string_pretty(graph).unwrap();
 	fs::write(path, json)
 }
 
-fn load_graph_json(path: &str) -> std::io::Result<DiGraph<PageInfo, ()>> {
+fn load_graph_json(path: &str) -> std::io::Result<DiGraph<String, ()>> {
 	let json = fs::read_to_string(path)?;
-	let graph: DiGraph<PageInfo, ()> = serde_json::from_str(&json).unwrap();
+	let graph: DiGraph<String, ()> = serde_json::from_str(&json).unwrap();
 	Ok(graph)
 }
 
-fn save_graph_dot(graph: &DiGraph<PageInfo, ()>, path: &str) -> std::io::Result<()> {
+fn save_graph_dot(graph: &DiGraph<String, ()>, path: &str) -> std::io::Result<()> {
 	let dot = format!("{:?}", Dot::with_config(graph, &[Config::EdgeNoLabel]));
 	fs::write(path, dot)
 }
@@ -170,15 +174,13 @@ fn save_graph_dot(graph: &DiGraph<PageInfo, ()>, path: &str) -> std::io::Result<
 fn main() {
 	let mut graph = match load_graph_json("geminispace.json") {
 		Ok(g) => g,
-		Err(e) => {
-			DiGraph::new()
-		}
+		Err(e) => DiGraph::new(),
 	};
-  graph = crawl("gemini://gemini.circumlunar.space/capcom", 1);
+	graph = crawl("gemini://gemini.circumlunar.space/capcom", 1);
 
-  save_graph_json(&graph, "geminispace.json").unwrap();
+	save_graph_json(&graph, "geminispace.json").unwrap();
 
-  // dot_export_graph(&graph, "geminispace.dot").unwrap();
+	// dot_export_graph(&graph, "geminispace.dot").unwrap();
 	// let mut visited = HashSet::new();
 	// recursive_process_page("gemini://kennedy.gemi.dev", &mut visited);
 }
