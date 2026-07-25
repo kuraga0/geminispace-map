@@ -27,24 +27,27 @@ fn request_page(url: &str) -> Result<String, Box<dyn std::error::Error>> {
 				println!("New URL: {}", url);
 			}
 			protocol::StatusCode::Success(c) => {
-				println!("Success! Code: {} with MIME type: {}", c, response.meta);
+				// println!("Success! Code: {} with MIME type: {}", c, response.meta);
 				return Ok(String::from_utf8_lossy(&response.data).into_owned());
 			}
-      StatusCode::PermanentFailure(c) => {
-        return Err(Box::new(GeminiError { status: StatusCode::PermanentFailure(c), meta: response.meta }));
-      }
+			StatusCode::PermanentFailure(c) => {
+				return Err(Box::new(GeminiError {
+					status: StatusCode::PermanentFailure(c),
+					meta: response.meta,
+				}));
+			}
 			// s => return Err(format!("Unknown status code: {:?}", s).into()),
 			s => return Err(format!("Unknown status code: {:?}", s).into()),
 		}
 	}
 }
 
-fn main() {
-  	let page = match request_page("gemini://kennedy.gemi.dev/") {
+fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+	let page = match request_page(url) {
 		Ok(page) => page,
 		Err(e) => {
 			eprintln!("Error: {e}");
-			return;
+			return Err(e);
 		}
 	};
 
@@ -52,17 +55,25 @@ fn main() {
 
 	let gemtext_nodes = gemtext::parse_gemtext(page.as_str());
 
-	println!("0: {}", &gemtext_nodes[0]);
+  let mut links: Vec<String> = Vec::new();
 
-  for node in &gemtext_nodes {
-    if let gemtext::GemtextNode::Link(s, l) = node {
-      println!("LINK: {:?} => {:?}", l, s);
+	for node in &gemtext_nodes {
+		if let gemtext::GemtextNode::Link(link, caption) = node {
+			println!("LINK: {:?} {:?}", caption, link);
+      links.push(link.to_owned());
+		}
+	}
+  
+  // fix links like "/about"
+  for i in 0..links.len() {
+    if links[i].starts_with("/") {
+      links[i] = format!("{}{}", url, links[i]);
     }
   }
 
-	if let gemtext::GemtextNode::Heading(s) = &gemtext_nodes[0] {
-		println!("{s}");
-	} else {
-		println!("Incorrect type!");
-	}
+  Ok(links)
+}
+
+fn main() {
+  println!("{:?}", process_page("gemini://kennedy.gemi.dev"));
 }
