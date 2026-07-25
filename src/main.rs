@@ -7,6 +7,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
 use std::fs;
 use std::panic;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug)]
 struct GeminiError {
@@ -90,8 +92,8 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 		}
 	}
 
-  // remove all non-gemini links
-  links.retain(|link| link.starts_with("gemini://"));
+	// remove all non-gemini links
+	links.retain(|link| link.starts_with("gemini://"));
 
 	Ok(links)
 }
@@ -118,6 +120,15 @@ fn recursive_process_page(url: &str, visited: &mut HashSet<String>) {
 }
 
 fn crawl(start: &str, max_depth: usize) -> DiGraph<String, ()> {
+	let stop = Arc::new(AtomicBool::new(false));
+	let stop_handler = Arc::clone(&stop);
+
+	ctrlc::set_handler(move || {
+		println!("\nStopping");
+		stop_handler.store(true, Ordering::SeqCst);
+	})
+	.unwrap();
+
 	let mut graph: DiGraph<String, ()> = DiGraph::new();
 	let mut indices: HashMap<String, NodeIndex> = HashMap::new();
 	let mut visited: HashSet<String> = HashSet::new();
@@ -126,6 +137,10 @@ fn crawl(start: &str, max_depth: usize) -> DiGraph<String, ()> {
 	queue.push_back((start.to_string(), 0));
 
 	while let Some((url, depth)) = queue.pop_front() {
+		if stop.load(Ordering::SeqCst) {
+			break;
+		}
+
 		if visited.contains(&url) || depth > max_depth {
 			continue;
 		}
@@ -138,9 +153,9 @@ fn crawl(start: &str, max_depth: usize) -> DiGraph<String, ()> {
 		match process_page(&url) {
 			Ok(links) => {
 				for link in links {
-					let link_idx = *indices.entry(link.clone()).or_insert_with(|| {
-						graph.add_node(link.clone())
-					});
+					let link_idx = *indices
+						.entry(link.clone())
+						.or_insert_with(|| graph.add_node(link.clone()));
 
 					graph.add_edge(idx, link_idx, ());
 
