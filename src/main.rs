@@ -90,6 +90,9 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 		}
 	}
 
+  // remove all non-gemini links
+  links.retain(|link| link.starts_with("gemini://"));
+
 	Ok(links)
 }
 
