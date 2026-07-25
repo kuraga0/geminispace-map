@@ -4,6 +4,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::dot::{Dot, Config};
 use std::fs;
+use serde::{Deserialize, Serialize};
+use serde_json;
 
 #[derive(Debug)]
 struct GeminiError {
@@ -149,9 +151,34 @@ fn crawl(start: &str, max_depth: usize) -> DiGraph<PageInfo, ()> {
 	graph
 }
 
-fn main() {
-  let graph = crawl("gemini://gemini.circumlunar.space/capcom", 5);
+fn save_graph_json(graph: &DiGraph<PageInfo, ()>, path: &str) -> std::io::Result<()> {
+	let json = serde_json::to_string_pretty(graph).unwrap();
+	fs::write(path, json)
+}
 
+fn load_graph_json(path: &str) -> std::io::Result<DiGraph<PageInfo, ()>> {
+	let json = fs::read_to_string(path)?;
+	let graph: DiGraph<PageInfo, ()> = serde_json::from_str(&json).unwrap();
+	Ok(graph)
+}
+
+fn save_graph_dot(graph: &DiGraph<PageInfo, ()>, path: &str) -> std::io::Result<()> {
+	let dot = format!("{:?}", Dot::with_config(graph, &[Config::EdgeNoLabel]));
+	fs::write(path, dot)
+}
+
+fn main() {
+	let mut graph = match load_graph_json("geminispace.json") {
+		Ok(g) => g,
+		Err(e) => {
+			DiGraph::new()
+		}
+	};
+  graph = crawl("gemini://gemini.circumlunar.space/capcom", 1);
+
+  save_graph_json(&graph, "geminispace.json").unwrap();
+
+  // dot_export_graph(&graph, "geminispace.dot").unwrap();
 	// let mut visited = HashSet::new();
 	// recursive_process_page("gemini://kennedy.gemi.dev", &mut visited);
 }
