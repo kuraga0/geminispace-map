@@ -1,10 +1,9 @@
 use gmi::{protocol::StatusCode, *};
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
-use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::panic;
 use std::sync::Arc;
@@ -24,6 +23,12 @@ impl std::fmt::Display for GeminiError {
 
 impl std::error::Error for GeminiError {}
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct PageNode {
+	url: String,
+	depth: usize,
+}
+
 fn parse_gemtext_safe(page: &str) -> Option<Vec<gemtext::GemtextNode>> {
 	panic::catch_unwind(|| gemtext::parse_gemtext(page)).ok()
 }
@@ -39,7 +44,7 @@ fn request_page(url: &str) -> Result<String, Box<dyn std::error::Error>> {
 				url = url::Url::try_from(response.meta.as_str())?;
 				println!("New URL: {}", url);
 			}
-			protocol::StatusCode::Success(c) => {
+			protocol::StatusCode::Success(_) => {
 				// println!("Success! Code: {} with MIME type: {}", c, response.meta);
 				return Ok(String::from_utf8_lossy(&response.data).into_owned());
 			}
@@ -96,27 +101,6 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 	links.retain(|link| link.starts_with("gemini://"));
 
 	Ok(links)
-}
-
-fn recursive_process_page(url: &str, visited: &mut HashSet<String>) {
-	if visited.contains(url) {
-		return;
-	}
-	visited.insert(url.to_string());
-
-	println!("  Visiting: {url}");
-
-	let links = match process_page(url) {
-		Ok(links) => links,
-		Err(e) => {
-			eprintln!("  Failed to process {url}: {e}");
-			return;
-		}
-	};
-
-	for l in links {
-		recursive_process_page(l.as_str(), visited);
-	}
 }
 
 fn crawl(mut graph: DiGraph<String, ()>, start: &str, max_depth: usize) -> DiGraph<String, ()> {
