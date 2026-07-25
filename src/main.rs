@@ -1,5 +1,6 @@
 use gmi::{protocol::StatusCode, *};
 use std::convert::TryFrom;
+use std::collections::HashSet;
 
 #[derive(Debug)]
 struct GeminiError {
@@ -59,7 +60,7 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 
 	for node in &gemtext_nodes {
 		if let gemtext::GemtextNode::Link(link, caption) = node {
-			println!("LINK: {:?} {:?}", caption, link);
+			println!("  LINK: {:?} {:?}", caption, link);
       links.push(link.to_owned());
 		}
 	}
@@ -74,6 +75,28 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
   Ok(links)
 }
 
+fn recursive_process_page(url: &str, visited: &mut HashSet<String>) {
+	if visited.contains(url) {
+		return;
+	}
+	visited.insert(url.to_string());
+
+	println!("Visiting: {url}");
+
+	let links = match process_page(url) {
+		Ok(links) => links,
+		Err(e) => {
+			eprintln!("Failed to process {url}: {e}");
+			return;
+		}
+	};
+
+	for l in links {
+		recursive_process_page(l.as_str(), visited);
+	}
+}
+
 fn main() {
-  println!("{:?}", process_page("gemini://kennedy.gemi.dev"));
+	let mut visited = HashSet::new();
+	recursive_process_page("gemini://kennedy.gemi.dev", &mut visited);
 }
