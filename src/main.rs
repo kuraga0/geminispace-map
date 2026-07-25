@@ -119,7 +119,7 @@ fn recursive_process_page(url: &str, visited: &mut HashSet<String>) {
 	}
 }
 
-fn crawl(start: &str, max_depth: usize) -> DiGraph<String, ()> {
+fn crawl(mut graph: DiGraph<String, ()>, start: &str, max_depth: usize) -> DiGraph<String, ()> {
 	let stop = Arc::new(AtomicBool::new(false));
 	let stop_handler = Arc::clone(&stop);
 
@@ -129,11 +129,16 @@ fn crawl(start: &str, max_depth: usize) -> DiGraph<String, ()> {
 	})
 	.unwrap();
 
-	let mut graph: DiGraph<String, ()> = DiGraph::new();
 	let mut indices: HashMap<String, NodeIndex> = HashMap::new();
 	let mut visited: HashSet<String> = HashSet::new();
-	let mut queue: VecDeque<(String, usize)> = VecDeque::new();
 
+	for idx in graph.node_indices() {
+		let url = graph[idx].clone();
+		indices.insert(url.clone(), idx);
+		visited.insert(url);
+	}
+
+	let mut queue: VecDeque<(String, usize)> = VecDeque::new();
 	queue.push_back((start.to_string(), 0));
 
 	while let Some((url, depth)) = queue.pop_front() {
@@ -190,11 +195,18 @@ fn save_graph_dot(graph: &DiGraph<String, ()>, path: &str) -> std::io::Result<()
 }
 
 fn main() {
-	let mut graph = match load_graph_json("data/geminispace.json") {
-		Ok(g) => g,
-		Err(e) => DiGraph::new(),
+	let graph = match load_graph_json("data/geminispace.json") {
+		Ok(g) => {
+			println!("Loaded graph with {} nodes.", g.node_count());
+			g
+		}
+		Err(e) => {
+			eprintln!("Cannot load graph ({e}), creating new.");
+			DiGraph::new()
+		}
 	};
-	graph = crawl("gemini://gemini.circumlunar.space/capcom", 15);
+
+	let graph = crawl(graph, "gemini://gemini.circumlunar.space/capcom", 15);
 
 	save_graph_json(&graph, "data/geminispace.json").unwrap();
 
