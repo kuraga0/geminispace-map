@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 gmi = "0.2.1"
+petgraph = "0.8.3"

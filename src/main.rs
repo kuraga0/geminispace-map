@@ -1,6 +1,9 @@
 use gmi::{protocol::StatusCode, *};
 use std::convert::TryFrom;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet, VecDeque};
+use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::dot::{Dot, Config};
+use std::fs;
 
 #[derive(Debug)]
 struct GeminiError {
@@ -15,6 +18,12 @@ impl std::fmt::Display for GeminiError {
 }
 
 impl std::error::Error for GeminiError {}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct PageInfo {
+	url: String,
+	title: Option<String>,
+}
 
 fn request_page(url: &str) -> Result<String, Box<dyn std::error::Error>> {
 	let mut url = url::Url::try_from(url).unwrap();
@@ -98,7 +107,51 @@ fn recursive_process_page(url: &str, visited: &mut HashSet<String>) {
 	}
 }
 
+fn crawl(start: &str, max_depth: usize) -> DiGraph<PageInfo, ()> {
+	let mut graph: DiGraph<PageInfo, ()> = DiGraph::new();
+	let mut indices: HashMap<String, NodeIndex> = HashMap::new();
+	let mut visited: HashSet<String> = HashSet::new();
+	let mut queue: VecDeque<(String, usize)> = VecDeque::new();
+
+	queue.push_back((start.to_string(), 0));
+
+	while let Some((url, depth)) = queue.pop_front() {
+		if visited.contains(&url) || depth > max_depth {
+			continue;
+		}
+		visited.insert(url.clone());
+
+		// добавляем узел, если ещё не добавлен
+		let idx = *indices.entry(url.clone()).or_insert_with(|| {
+			graph.add_node(PageInfo { url: url.clone(), title: None })
+		});
+
+		match process_page(&url) {
+			Ok(links) => {
+				for link in links {
+					let link_idx = *indices.entry(link.clone()).or_insert_with(|| {
+						graph.add_node(PageInfo { url: link.clone(), title: None })
+					});
+
+					graph.add_edge(idx, link_idx, ());
+
+					if !visited.contains(&link) {
+						queue.push_back((link, depth + 1));
+					}
+				}
+			}
+			Err(e) => {
+				eprintln!("Failed {url}: {e}");
+			}
+		}
+	}
+
+	graph
+}
+
 fn main() {
-	let mut visited = HashSet::new();
-	recursive_process_page("gemini://kennedy.gemi.dev", &mut visited);
+  let graph = crawl("gemini://gemini.circumlunar.space/capcom", 5);
+
+	// let mut visited = HashSet::new();
+	// recursive_process_page("gemini://kennedy.gemi.dev", &mut visited);
 }
