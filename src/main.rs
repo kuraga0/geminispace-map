@@ -1,7 +1,7 @@
-use gmi::{protocol::StatusCode, request::RequestError, *};
+use gmi::*;
 use std::convert::TryFrom;
 
-fn request_page(url: &str) -> Result<std::vec::Vec<u8>, StatusCode> {
+fn request_page(url: &str) -> Result<std::vec::Vec<u8>, request::RequestError> {
 	let mut url = url::Url::try_from(url).unwrap();
 	println!("Making response with URL: {}", url);
 	loop {
@@ -16,11 +16,12 @@ fn request_page(url: &str) -> Result<std::vec::Vec<u8>, StatusCode> {
 				println!("Success! Code: {} with MIME type: {}", c, response.meta);
 				return Ok(response.data.clone());
 			}
-			s => return Err(s),
+			s => panic!("Unknown status code: {:?}", s),
 		}
 	}
+
 }
 
 fn main() {
-	request_page("gemini://station.martinrue.com");
+  request_page("gemini://station.martinrue.com");
 }
