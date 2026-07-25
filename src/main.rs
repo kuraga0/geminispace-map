@@ -18,7 +18,7 @@ impl std::error::Error for GeminiError {}
 
 fn request_page(url: &str) -> Result<String, Box<dyn std::error::Error>> {
 	let mut url = url::Url::try_from(url).unwrap();
-	println!("Making response with URL: {}", url);
+	// println!("Making response with URL: {}", url);
 	loop {
 		let response = request::make_request(&url)?;
 		match response.status {
@@ -47,7 +47,7 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 	let page = match request_page(url) {
 		Ok(page) => page,
 		Err(e) => {
-			eprintln!("Error: {e}");
+			// eprintln!("Error: {e}");
 			return Err(e);
 		}
 	};
@@ -67,8 +67,10 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
   
   // fix links like "/about"
   for i in 0..links.len() {
-    if links[i].starts_with("/") {
-      links[i] = format!("{}{}", url, links[i]);
+    if links[i].starts_with('/') {
+      if let Ok(parsed) = url::Url::try_from(url) {
+        links[i] = format!("gemini://{}{}", parsed.authority, links[i]);
+      }
     }
   }
 
@@ -81,12 +83,12 @@ fn recursive_process_page(url: &str, visited: &mut HashSet<String>) {
 	}
 	visited.insert(url.to_string());
 
-	println!("Visiting: {url}");
+	println!("  Visiting: {url}");
 
 	let links = match process_page(url) {
 		Ok(links) => links,
 		Err(e) => {
-			eprintln!("Failed to process {url}: {e}");
+			eprintln!("  Failed to process {url}: {e}");
 			return;
 		}
 	};
