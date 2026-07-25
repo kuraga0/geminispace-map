@@ -40,7 +40,7 @@ fn request_page(url: &str) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 fn main() {
-  	let page = match request_page("gemini://kennedy.gemi.dev/dsfg2fdwe") {
+  	let page = match request_page("gemini://kennedy.gemi.dev/") {
 		Ok(page) => page,
 		Err(e) => {
 			eprintln!("Error: {e}");
@@ -53,6 +53,12 @@ fn main() {
 	let gemtext_nodes = gemtext::parse_gemtext(page.as_str());
 
 	println!("0: {}", &gemtext_nodes[0]);
+
+  for node in &gemtext_nodes {
+    if let gemtext::GemtextNode::Link(s, l) = node {
+      println!("LINK: {:?} => {:?}", l, s);
+    }
+  }
 
 	if let gemtext::GemtextNode::Heading(s) = &gemtext_nodes[0] {
 		println!("{s}");
