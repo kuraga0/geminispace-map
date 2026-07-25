@@ -27,14 +27,14 @@ fn parse_gemtext_safe(page: &str) -> Option<Vec<gemtext::GemtextNode>> {
 }
 
 fn request_page(url: &str) -> Result<String, Box<dyn std::error::Error>> {
-	let mut url = url::Url::try_from(url).unwrap();
+	let mut url = url::Url::try_from(url)?;
 	// println!("Making response with URL: {}", url);
 	loop {
 		let response = request::make_request(&url)?;
 		match response.status {
 			protocol::StatusCode::Redirect(c) => {
 				println!("Redirect! Code: {} with meta {}", c, response.meta);
-				url = url::Url::try_from(response.meta.as_str()).unwrap();
+				url = url::Url::try_from(response.meta.as_str())?;
 				println!("New URL: {}", url);
 			}
 			protocol::StatusCode::Success(c) => {
@@ -176,11 +176,11 @@ fn main() {
 		Ok(g) => g,
 		Err(e) => DiGraph::new(),
 	};
-	graph = crawl("gemini://gemini.circumlunar.space/capcom", 1);
+	graph = crawl("gemini://gemini.circumlunar.space/capcom", 15);
 
 	save_graph_json(&graph, "geminispace.json").unwrap();
 
-	// dot_export_graph(&graph, "geminispace.dot").unwrap();
+	save_graph_dot(&graph, "geminispace.dot").unwrap();
 	// let mut visited = HashSet::new();
 	// recursive_process_page("gemini://kennedy.gemi.dev", &mut visited);
 }
