@@ -190,15 +190,15 @@ fn save_graph_dot(graph: &DiGraph<String, ()>, path: &str) -> std::io::Result<()
 }
 
 fn main() {
-	let mut graph = match load_graph_json("geminispace.json") {
+	let mut graph = match load_graph_json("data/geminispace.json") {
 		Ok(g) => g,
 		Err(e) => DiGraph::new(),
 	};
 	graph = crawl("gemini://gemini.circumlunar.space/capcom", 15);
 
-	save_graph_json(&graph, "geminispace.json").unwrap();
+	save_graph_json(&graph, "data/geminispace.json").unwrap();
 
-	save_graph_dot(&graph, "geminispace.dot").unwrap();
+	save_graph_dot(&graph, "data/geminispace.dot").unwrap();
 	// let mut visited = HashSet::new();
 	// recursive_process_page("gemini://kennedy.gemi.dev", &mut visited);
 }
