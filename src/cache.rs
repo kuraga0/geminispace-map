@@ -22,4 +22,3 @@ pub fn load_cache(path: &str) -> std::io::Result<CachePages> {
 		.map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 	Ok(cache)
 }
-
