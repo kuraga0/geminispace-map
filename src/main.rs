@@ -97,8 +97,12 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 			continue;
 		}
 		if let Ok(parsed) = url::Url::try_from(url) {
-      *link = format!("gemini://{}{}", parsed.authority, parsed.path.unwrap_or(Path::from("")));
-    }
+			*link = format!(
+				"gemini://{}{}",
+				parsed.authority,
+				parsed.path.unwrap_or(Path::from(""))
+			);
+		}
 	}
 
 	// remove all non-gemini links
@@ -154,6 +158,10 @@ fn crawl(mut graph: DiGraph<PageNode, ()>, start: &str, max_depth: usize) -> DiG
 		match process_page(&url) {
 			Ok(links) => {
 				for link in links {
+          // skip the links that link to themselves
+					if link == url {
+						continue;
+					}
 					let link_idx = *indices.entry(link.clone()).or_insert_with(|| {
 						graph.add_node(PageNode {
 							url: link.clone(),
@@ -166,7 +174,7 @@ fn crawl(mut graph: DiGraph<PageNode, ()>, start: &str, max_depth: usize) -> DiG
 						graph[link_idx].depth = depth + 1;
 					}
 
-					graph.add_edge(idx, link_idx, ());
+					graph.update_edge(idx, link_idx, ());
 
 					if !visited.contains(&link) {
 						queue.push_back((link, depth + 1));
@@ -201,7 +209,7 @@ fn save_graph_dot(graph: &DiGraph<PageNode, ()>, path: &str) -> std::io::Result<
 		Dot::with_attr_getters(
 			graph,
 			&[Config::EdgeNoLabel],
-      &|_, _| String::new(),
+			&|_, _| String::new(),
 			&|_, (_, node)| format!("label=\"{}\"", node.url),
 		)
 	);
