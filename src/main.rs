@@ -1,3 +1,4 @@
+use clap::Parser;
 use gmi::url::Path;
 use gmi::{protocol::StatusCode, *};
 use petgraph::dot::{Config, Dot};
@@ -9,6 +10,18 @@ use std::fs;
 use std::panic;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+	input: String,
+
+	#[arg(short, long, default_value_t = 5)]
+	max_depth: usize,
+
+	#[arg(short, long, default_value_t = String::new())]
+	dot_path: String,
+}
 
 #[derive(Debug)]
 struct GeminiError {
@@ -158,7 +171,7 @@ fn crawl(mut graph: DiGraph<PageNode, ()>, start: &str, max_depth: usize) -> DiG
 		match process_page(&url) {
 			Ok(links) => {
 				for link in links {
-          // skip the links that link to themselves
+					// skip the links that link to themselves
 					if link == url {
 						continue;
 					}
@@ -217,7 +230,9 @@ fn save_graph_dot(graph: &DiGraph<PageNode, ()>, path: &str) -> std::io::Result<
 }
 
 fn main() {
-	let graph = match load_graph_json("data/geminispace.json") {
+	let args = Args::parse();
+
+	let graph = match load_graph_json(&args.input) {
 		Ok(g) => {
 			println!("Loaded graph with {} nodes.", g.node_count());
 			g
@@ -228,8 +243,11 @@ fn main() {
 		}
 	};
 
-	let graph = crawl(graph, "gemini://gemini.circumlunar.space/capcom", 15);
+	let graph = crawl(graph, "gemini://gemini.circumlunar.space/capcom", args.max_depth);
 
-	save_graph_json(&graph, "data/geminispace.json").unwrap();
-	save_graph_dot(&graph, "data/geminispace.dot").unwrap();
+	save_graph_json(&graph, &args.input).unwrap();
+
+  if args.dot_path != String::new() {
+    save_graph_dot(&graph, "data/geminispace.dot").unwrap();
+  }
 }
