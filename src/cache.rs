@@ -1,14 +1,7 @@
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 
 pub type CachePages = HashMap<String, Vec<String>>;
-
-pub fn hash_str(s: &str) -> String {
-	let mut hasher = Sha256::new();
-	hasher.update(s.as_bytes());
-	format!("{:?}", hex::encode(hasher.finalize()))
-}
 
 pub fn cache_insert(cache: &mut CachePages, url: &str, links: Vec<String>) {
 	cache.insert(url.to_string(), links);
