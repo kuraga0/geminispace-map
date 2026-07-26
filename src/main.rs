@@ -1,6 +1,8 @@
+use gmi::url::Path;
 use gmi::{protocol::StatusCode, *};
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
@@ -8,7 +10,6 @@ use std::fs;
 use std::panic;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use petgraph::visit::EdgeRef;
 
 #[derive(Debug)]
 struct GeminiError {
@@ -28,7 +29,7 @@ impl std::error::Error for GeminiError {}
 struct PageNode {
 	url: String,
 	depth: usize,
-  // link was fully recursively processed
+	// link was fully recursively processed
 	processed: bool,
 }
 
@@ -92,12 +93,13 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 	}
 
 	// fix links like "/about"
-	for i in 0..links.len() {
-		if links[i].starts_with('/') {
-			if let Ok(parsed) = url::Url::try_from(url) {
-				links[i] = format!("gemini://{}{}", parsed.authority, links[i]);
-			}
+	for link in links.iter_mut() {
+		if !link.starts_with('/') {
+			continue;
 		}
+		if let Ok(parsed) = url::Url::try_from(url) {
+      *link = format!("gemini://{}{}", parsed.authority, parsed.path.unwrap_or(Path::from("")));
+    }
 	}
 
 	// remove all non-gemini links
