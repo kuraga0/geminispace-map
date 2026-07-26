@@ -1,15 +1,23 @@
 use clap::Parser;
+use core::hash;
 use gmi::url::Path;
 use gmi::{protocol::StatusCode, *};
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
 use std::fs;
 use std::panic;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use ::url::Url;
+
+mod cache;
+use cache::CachePages;
+
+use crate::cache::cache_insert;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -18,12 +26,18 @@ struct Args {
 
 	#[arg(short, long, default_value_t = "gemini://gemini.circumlunar.space/capcom".to_string())]
 	start: String,
-	
-  #[arg(short, long, default_value_t = 5)]
+
+	#[arg(short, long, default_value_t = 5)]
 	max_depth: usize,
 
 	#[arg(short, long)]
 	dot_path: Option<String>,
+
+	#[arg(short, long, default_value_t = false)]
+	cache: bool,
+
+	#[arg(long, default_value = "data/cache.json")]
+	cache_path: String,
 }
 
 #[derive(Debug)]
@@ -109,16 +123,11 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 
 	// fix links like "/about"
 	for link in links.iter_mut() {
-		if !link.starts_with('/') {
-			continue;
-		}
-		if let Ok(parsed) = url::Url::try_from(url) {
-			*link = format!(
-				"gemini://{}{}",
-				parsed.authority,
-				parsed.path.unwrap_or(Path::from(""))
-			);
-		}
+    if link.starts_with("htt") {
+      continue;
+    }
+		*link = normalize_link(link.as_str(), url);
+		println!("  LINK fix: {:?}", link);
 	}
 
 	// remove all non-gemini links
@@ -127,7 +136,35 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 	Ok(links)
 }
 
-fn crawl(mut graph: DiGraph<PageNode, ()>, start: &str, max_depth: usize) -> DiGraph<PageNode, ()> {
+fn normalize_link(link: &str, base: &str) -> String {
+	let base = match Url::try_from(base) {
+		Ok(u) => u,
+		Err(_) => return link.to_string(),
+	};
+
+	match base.join(link) {
+		Ok(url) => url.to_string(),
+		Err(_) => link.to_string(),
+	}
+}
+
+fn cache_process_page(
+	url: &str,
+	cache: &mut CachePages,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+	if let Some(links) = cache.get(url) {
+		Ok(links.clone())
+	} else {
+		process_page(url)
+	}
+}
+
+fn crawl(
+	mut graph: DiGraph<PageNode, ()>,
+	start: &str,
+	max_depth: usize,
+	cache: &mut Option<CachePages>,
+) -> DiGraph<PageNode, ()> {
 	let stop = Arc::new(AtomicBool::new(false));
 	let stop_handler = Arc::clone(&stop);
 
@@ -171,7 +208,24 @@ fn crawl(mut graph: DiGraph<PageNode, ()>, start: &str, max_depth: usize) -> DiG
 			graph[idx].depth = depth;
 		}
 
-		match process_page(&url) {
+		let links = if let Some(c) = cache.as_mut() {
+			if let Some(cached) = cache::cache_get(c, &url) {
+				println!("CACHE: {}", url);
+				Ok(cached)
+			} else {
+				match process_page(&url) {
+					Ok(links) => {
+						cache::cache_insert(c, &url, links.clone());
+						Ok(links)
+					}
+					Err(e) => Err(e),
+				}
+			}
+		} else {
+			process_page(&url)
+		};
+
+		match links {
 			Ok(links) => {
 				for link in links {
 					// skip the links that link to themselves
@@ -235,6 +289,15 @@ fn save_graph_dot(graph: &DiGraph<PageNode, ()>, path: &str) -> std::io::Result<
 fn main() {
 	let args = Args::parse();
 
+	let mut cache_pages: Option<cache::CachePages> = None;
+
+	if args.cache {
+		cache_pages = match cache::load_cache(&args.cache_path) {
+			Ok(c) => Some(c),
+			Err(e) => Some(cache::CachePages::new()),
+		};
+	}
+
 	let graph = match load_graph_json(&args.input) {
 		Ok(g) => {
 			println!("Loaded graph with {} nodes.", g.node_count());
@@ -246,11 +309,20 @@ fn main() {
 		}
 	};
 
-	let graph = crawl(graph, "gemini://gemini.circumlunar.space/capcom", args.max_depth);
+	let graph = crawl(
+		graph,
+		"gemini://gemini.circumlunar.space/capcom",
+		args.max_depth,
+		&mut cache_pages,
+	);
 
 	save_graph_json(&graph, &args.input).unwrap();
 
-  if let Some(d) = args.dot_path {
-    save_graph_dot(&graph, &d).unwrap();
-  }
+	if let Some(d) = args.dot_path {
+		save_graph_dot(&graph, &d).unwrap();
+	}
+
+	if let Some(cache_pages) = cache_pages.as_ref() {
+		cache::save_cache(cache_pages, &args.cache_path).unwrap();
+	}
 }
