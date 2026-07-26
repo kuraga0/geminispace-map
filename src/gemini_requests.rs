@@ -1,7 +1,7 @@
-use ::url::Url;
 use gmi::{protocol::StatusCode, *};
 use std::convert::TryFrom;
 use std::panic;
+use crate::link::normalize_link;
 
 #[derive(Debug)]
 struct GeminiError {
@@ -78,9 +78,6 @@ pub fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>
 
 	// fix links like "/about"
 	for link in links.iter_mut() {
-		if link.starts_with("htt") {
-			continue;
-		}
 		*link = normalize_link(link.as_str(), url);
 		println!("  LINK fix: {:?}", link);
 	}
@@ -91,14 +88,3 @@ pub fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>
 	Ok(links)
 }
 
-pub fn normalize_link(link: &str, base: &str) -> String {
-	let base = match Url::try_from(base) {
-		Ok(u) => u,
-		Err(_) => return link.to_string(),
-	};
-
-	match base.join(link) {
-		Ok(url) => url.to_string(),
-		Err(_) => link.to_string(),
-	}
-}

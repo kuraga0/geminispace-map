@@ -18,24 +18,14 @@ pub struct PageNode {
 	processed: bool,
 }
 
-fn cache_process_page(
-	url: &str,
-	cache: &mut CachePages,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-	if let Some(links) = cache.get(url) {
-		Ok(links.clone())
-	} else {
-		process_page(url)
-	}
-}
-
 pub fn crawl(
 	mut graph: DiGraph<PageNode, ()>,
 	start: &str,
 	max_depth: usize,
 	cache: &mut Option<CachePages>,
 ) -> DiGraph<PageNode, ()> {
-	let stop = Arc::new(AtomicBool::new(false));
+	
+  let stop = Arc::new(AtomicBool::new(false));
 	let stop_handler = Arc::clone(&stop);
 
 	ctrlc::set_handler(move || {

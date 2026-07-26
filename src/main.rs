@@ -4,6 +4,7 @@ use petgraph::graph::DiGraph;
 mod cache;
 mod gemini_requests;
 mod graph;
+mod link;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -51,7 +52,7 @@ fn main() {
 
 	let graph = graph::crawl(
 		graph,
-		"gemini://gemini.circumlunar.space/capcom",
+		args.start.as_str(),
 		args.max_depth,
 		&mut cache_pages,
 	);
@@ -62,7 +63,7 @@ fn main() {
 		graph::save_graph_dot(&graph, &d).unwrap();
 	}
 
-	if let Some(cache_pages) = cache_pages.as_ref() {
+	if let Some(cache_pages) = &cache_pages {
 		cache::save_cache(cache_pages, &args.cache_path).unwrap();
 	}
 }
