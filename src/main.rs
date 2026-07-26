@@ -1,13 +1,14 @@
 use gmi::{protocol::StatusCode, *};
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
-use serde::{Deserialize, Serialize};
 use std::fs;
 use std::panic;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use petgraph::visit::EdgeRef;
 
 #[derive(Debug)]
 struct GeminiError {
@@ -27,6 +28,8 @@ impl std::error::Error for GeminiError {}
 struct PageNode {
 	url: String,
 	depth: usize,
+  // link was fully recursively processed
+	processed: bool,
 }
 
 fn parse_gemtext_safe(page: &str) -> Option<Vec<gemtext::GemtextNode>> {
@@ -103,7 +106,7 @@ fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 	Ok(links)
 }
 
-fn crawl(mut graph: DiGraph<String, ()>, start: &str, max_depth: usize) -> DiGraph<String, ()> {
+fn crawl(mut graph: DiGraph<PageNode, ()>, start: &str, max_depth: usize) -> DiGraph<PageNode, ()> {
 	let stop = Arc::new(AtomicBool::new(false));
 	let stop_handler = Arc::clone(&stop);
 
@@ -117,9 +120,9 @@ fn crawl(mut graph: DiGraph<String, ()>, start: &str, max_depth: usize) -> DiGra
 	let mut visited: HashSet<String> = HashSet::new();
 
 	for idx in graph.node_indices() {
-		let url = graph[idx].clone();
+		let url = graph[idx].url.clone();
 		indices.insert(url.clone(), idx);
-		visited.insert(url);
+		// visited.insert(url);
 	}
 
 	let mut queue: VecDeque<(String, usize)> = VecDeque::new();
@@ -135,16 +138,32 @@ fn crawl(mut graph: DiGraph<String, ()>, start: &str, max_depth: usize) -> DiGra
 		}
 		visited.insert(url.clone());
 
-		let idx = *indices
-			.entry(url.clone())
-			.or_insert_with(|| graph.add_node(url.clone()));
+		let idx = *indices.entry(url.clone()).or_insert_with(|| {
+			graph.add_node(PageNode {
+				url: url.clone(),
+				depth,
+				processed: false,
+			})
+		});
+
+		if graph[idx].depth > depth {
+			graph[idx].depth = depth;
+		}
 
 		match process_page(&url) {
 			Ok(links) => {
 				for link in links {
-					let link_idx = *indices
-						.entry(link.clone())
-						.or_insert_with(|| graph.add_node(link.clone()));
+					let link_idx = *indices.entry(link.clone()).or_insert_with(|| {
+						graph.add_node(PageNode {
+							url: link.clone(),
+							depth,
+							processed: false,
+						})
+					});
+
+					if graph[link_idx].depth > depth + 1 {
+						graph[link_idx].depth = depth + 1;
+					}
 
 					graph.add_edge(idx, link_idx, ());
 
@@ -152,6 +171,8 @@ fn crawl(mut graph: DiGraph<String, ()>, start: &str, max_depth: usize) -> DiGra
 						queue.push_back((link, depth + 1));
 					}
 				}
+
+				graph[idx].processed = true;
 			}
 			Err(e) => {
 				eprintln!("Failed {url}: {e}");
@@ -162,19 +183,36 @@ fn crawl(mut graph: DiGraph<String, ()>, start: &str, max_depth: usize) -> DiGra
 	graph
 }
 
-fn save_graph_json(graph: &DiGraph<String, ()>, path: &str) -> std::io::Result<()> {
+fn save_graph_json(graph: &DiGraph<PageNode, ()>, path: &str) -> std::io::Result<()> {
 	let json = serde_json::to_string_pretty(graph).unwrap();
 	fs::write(path, json)
 }
 
-fn load_graph_json(path: &str) -> std::io::Result<DiGraph<String, ()>> {
+fn load_graph_json(path: &str) -> std::io::Result<DiGraph<PageNode, ()>> {
 	let json = fs::read_to_string(path)?;
-	let graph: DiGraph<String, ()> = serde_json::from_str(&json).unwrap();
+	let graph: DiGraph<PageNode, ()> = serde_json::from_str(&json).unwrap();
 	Ok(graph)
 }
 
-fn save_graph_dot(graph: &DiGraph<String, ()>, path: &str) -> std::io::Result<()> {
-	let dot = format!("{:?}", Dot::with_config(graph, &[Config::EdgeNoLabel]));
+fn save_graph_dot(graph: &DiGraph<PageNode, ()>, path: &str) -> std::io::Result<()> {
+	let dot = format!(
+		"{:?}",
+		Dot::with_attr_getters(
+			graph,
+			&[Config::EdgeNoLabel],
+			&|graph_reference, edge_reference| {
+				let source = graph_reference[edge_reference.source()].depth;
+				let target = graph_reference[edge_reference.target()].depth;
+
+				if target > source + 1 {
+					"style=dashed, penwidth=3".to_owned()
+				} else {
+					"style=solid".to_owned()
+				}
+			},
+			&|_, (_, node)| format!("label=\"{}\"", node.url),
+		)
+	);
 	fs::write(path, dot)
 }
 
@@ -193,8 +231,5 @@ fn main() {
 	let graph = crawl(graph, "gemini://gemini.circumlunar.space/capcom", 15);
 
 	save_graph_json(&graph, "data/geminispace.json").unwrap();
-
 	save_graph_dot(&graph, "data/geminispace.dot").unwrap();
-	// let mut visited = HashSet::new();
-	// recursive_process_page("gemini://kennedy.gemi.dev", &mut visited);
 }
