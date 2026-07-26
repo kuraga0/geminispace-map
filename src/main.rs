@@ -19,8 +19,8 @@ struct Args {
 	#[arg(short, long, default_value_t = 5)]
 	max_depth: usize,
 
-	#[arg(short, long, default_value_t = String::new())]
-	dot_path: String,
+	#[arg(short, long)]
+	dot_path: Option<String>,
 }
 
 #[derive(Debug)]
@@ -247,7 +247,7 @@ fn main() {
 
 	save_graph_json(&graph, &args.input).unwrap();
 
-  if args.dot_path != String::new() {
-    save_graph_dot(&graph, "data/geminispace.dot").unwrap();
+  if let Some(d) = args.dot_path {
+    save_graph_dot(&graph, &d).unwrap();
   }
 }
