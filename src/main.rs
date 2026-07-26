@@ -50,20 +50,21 @@ fn main() {
 		}
 	};
 
-	let graph = graph::crawl(
-		graph,
-		args.start.as_str(),
-		args.max_depth,
-		&mut cache_pages,
-	);
+	let graph = graph::crawl(graph, args.start.as_str(), args.max_depth, &mut cache_pages);
 
-	graph::save_graph_json(&graph, &args.input).unwrap();
-
-	if let Some(d) = args.dot_path {
-		graph::save_graph_dot(&graph, &d).unwrap();
+	if let Err(e) = graph::save_graph_json(&graph, &args.input) {
+		eprintln!("Failed to save {}: {}", args.input, e)
 	}
 
-	if let Some(cache_pages) = &cache_pages {
-		cache::save_cache(cache_pages, &args.cache_path).unwrap();
+	if let Some(d) = &args.dot_path
+		&& let Err(e) = graph::save_graph_dot(&graph, d)
+	{
+		eprintln!("Failed to save {}: {}", d, e);
+	}
+
+	if let Some(cache_pages) = &cache_pages
+		&& let Err(e) = cache::save_cache(cache_pages, &args.cache_path)
+	{
+		eprintln!("Failed to save {}: {}", args.cache_path, e)
 	}
 }
