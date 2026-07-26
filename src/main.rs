@@ -16,7 +16,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 struct Args {
 	input: String,
 
-	#[arg(short, long, default_value_t = 5)]
+	#[arg(short, long, default_value_t = "gemini://gemini.circumlunar.space/capcom".to_string())]
+	start: String,
+	
+  #[arg(short, long, default_value_t = 5)]
 	max_depth: usize,
 
 	#[arg(short, long)]
