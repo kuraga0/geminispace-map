@@ -2,7 +2,6 @@ use gmi::url::Path;
 use gmi::{protocol::StatusCode, *};
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
@@ -202,16 +201,7 @@ fn save_graph_dot(graph: &DiGraph<PageNode, ()>, path: &str) -> std::io::Result<
 		Dot::with_attr_getters(
 			graph,
 			&[Config::EdgeNoLabel],
-			&|graph_reference, edge_reference| {
-				let source = graph_reference[edge_reference.source()].depth;
-				let target = graph_reference[edge_reference.target()].depth;
-
-				if target > source + 1 {
-					"style=dashed, penwidth=3".to_owned()
-				} else {
-					"style=solid".to_owned()
-				}
-			},
+      &|_, _| String::new(),
 			&|_, (_, node)| format!("label=\"{}\"", node.url),
 		)
 	);
