@@ -28,9 +28,9 @@ pub fn request_page(url: &str) -> Result<String, Box<dyn std::error::Error>> {
 		let response = request::make_request(&url)?;
 		match response.status {
 			protocol::StatusCode::Redirect(c) => {
-				println!("Redirect! Code: {} with meta {}", c, response.meta);
+				println!("  Redirect! Code: {} with meta {}", c, response.meta);
 				url = url::Url::try_from(response.meta.as_str())?;
-				println!("New URL: {}", url);
+				println!("  New URL: {}", url);
 			}
 			protocol::StatusCode::Success(_) => {
 				// println!("Success! Code: {} with MIME type: {}", c, response.meta);
@@ -43,7 +43,7 @@ pub fn request_page(url: &str) -> Result<String, Box<dyn std::error::Error>> {
 				}));
 			}
 			// s => return Err(format!("Unknown status code: {:?}", s).into()),
-			s => return Err(format!("Unknown status code: {:?}", s).into()),
+			s => return Err(format!("  Unknown status code: {:?}", s).into()),
 		}
 	}
 }

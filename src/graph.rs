@@ -13,6 +13,7 @@ use crate::gemini_requests::process_page;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PageNode {
 	url: String,
+  // depth in graph
 	depth: usize,
 	// link was fully recursively processed
 	processed: bool,
@@ -64,13 +65,9 @@ pub fn crawl(
 			})
 		});
 
-		if graph[idx].depth > depth {
-			graph[idx].depth = depth;
-		}
-
 		let links = if let Some(c) = cache.as_mut() {
 			if let Some(cached) = cache::cache_get(c, &url) {
-				println!("CACHE: {}", url);
+				println!("  CACHE: {}", url);
 				Ok(cached)
 			} else {
 				match process_page(&url) {
@@ -114,7 +111,7 @@ pub fn crawl(
 				graph[idx].processed = true;
 			}
 			Err(e) => {
-				eprintln!("Failed {url}: {e}");
+				eprintln!("  Failed {url}: {e}");
 			}
 		}
 	}
