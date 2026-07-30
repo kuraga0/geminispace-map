@@ -1,7 +1,7 @@
+use crate::link::normalize_link;
 use gmi::{protocol::StatusCode, *};
 use std::convert::TryFrom;
 use std::panic;
-use crate::link::normalize_link;
 
 #[derive(Debug)]
 struct GeminiError {
@@ -85,6 +85,10 @@ pub fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>
 	// remove all non-gemini links
 	links.retain(|link| link.starts_with("gemini://"));
 
+	const SKIP_EXTENSIONS: &[&str] = &[
+		".mp3", ".opus", ".wav", ".flac", ".mp4", ".png", ".jpeg", ".jpg", ".exe",
+	];
+	links.retain(|link| !SKIP_EXTENSIONS.iter().any(|suf| link.ends_with(suf)));
+
 	Ok(links)
 }
-
