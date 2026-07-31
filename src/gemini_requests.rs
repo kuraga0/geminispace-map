@@ -86,7 +86,7 @@ pub fn process_page(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>
 	links.retain(|link| link.starts_with("gemini://"));
 
 	const SKIP_EXTENSIONS: &[&str] = &[
-		".mp3", ".opus", ".wav", ".flac", ".mp4", ".png", ".jpeg", ".jpg", ".exe",
+		".mp3", ".opus", ".wav", ".flac", ".mp4", ".png", ".webp", ".jpeg", ".jpg", ".exe", ".fontpack",
 	];
 	links.retain(|link| !SKIP_EXTENSIONS.iter().any(|suf| link.ends_with(suf)));
 

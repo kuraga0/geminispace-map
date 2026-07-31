@@ -45,19 +45,9 @@ sfdp geminispace.dot \
     -Gsep="+25" -GK=2 -Gmaxiter=50 -Gdpi=96 -v
 ```
 
-svg
-```
-sfdp geminispace.dot \
-    -Tsvg -o geminispace.svg \
-    -Goverlap=prism -Gsplines=line \
-    -Gbgcolor="black" \
-    -Nfontname="Arial" -Nfontsize=8 -Nfontcolor="white" -Ncolor="white" \
-    -Ecolor="#ff0000" -Epenwidth=1 \
-    -Gsep="+25" -GK=2 -Gmaxiter=50 -v
-```
-
 For image viewer, i recommend vipsdisp, it doesnt crash on large images.
 
 ### Rendering issues
 1. You might get a sfdp syntax error when a page url contains `\\\\`, you need to remove or replace them.
 2. It may take a lot of time, on my mid tier pc it took 18 hours to render 80265 node graph png with text.
+3. If you render SVG and try to open it you might receive error `glib: XML parse error: cannot load more than 200000 XML elements`, if the graph is too big. Converting svg to png with `rsvg-convert` gives the same error.

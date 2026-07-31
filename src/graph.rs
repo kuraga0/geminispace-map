@@ -13,7 +13,7 @@ use crate::gemini_requests::process_page;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PageNode {
 	url: String,
-  // depth in graph
+	// depth in graph
 	depth: usize,
 	// link was fully recursively processed
 	processed: bool,
@@ -25,8 +25,7 @@ pub fn crawl(
 	max_depth: usize,
 	cache: &mut Option<CachePages>,
 ) -> DiGraph<PageNode, ()> {
-	
-  let stop = Arc::new(AtomicBool::new(false));
+	let stop = Arc::new(AtomicBool::new(false));
 	let stop_handler = Arc::clone(&stop);
 
 	ctrlc::set_handler(move || {
